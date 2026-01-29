@@ -1,7 +1,8 @@
 import tkinter as tk
-from tkinter import messagebox
 import yfinance as yf
 import matplotlib.pyplot as plt
+import signal
+from tkinter import messagebox
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from datetime import datetime
 
@@ -84,6 +85,17 @@ def on_click_display():
         status_label.config(text="Fetch Failed", fg="#ef4444")
         messagebox.showerror("Error", "Ticker not found or connection issue.")
 
+# Ctrl + C を受け取った時の処理
+def handle_sigint(sig, frame):
+    print("\nCtrl+C を検知しました。終了します...")
+    root.quit()    # メインループを抜ける
+    root.destroy() # ウィンドウを破棄する
+
+
+# 一定時間（例: 500ミリ秒）ごとに、Python側に制御を戻して信号をチェックさせる
+def check_signal():
+    root.after(500, check_signal)
+
 # --- 画面の構築 ---
 root = tk.Tk()
 root.title("Stock Trend & Volume Analyzer")
@@ -98,7 +110,7 @@ entry = tk.Entry(input_frame, font=("Consolas", 12))
 entry.insert(0, "7203.T")
 entry.pack(side=tk.LEFT, padx=10)
 
-btn = tk.Button(input_frame, text="Analyze", command=on_click_display, 
+btn = tk.Button(input_frame, text="更新する", command=on_click_display, 
                bg="#3b82f6", fg="white", font=("Arial", 10, "bold"), padx=20)
 btn.pack(side=tk.LEFT)
 
@@ -112,5 +124,9 @@ fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(7, 6), sharex=True,
 
 canvas = FigureCanvasTkAgg(fig, master=root)
 canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+
+# メインループの前にこれを設定
+signal.signal(signal.SIGINT, handle_sigint)
+root.after(500, check_signal)
 
 root.mainloop()

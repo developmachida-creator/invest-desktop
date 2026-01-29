@@ -3,3 +3,6 @@ python .\app.pyw
 
 ビルドコマンド
 python -m PyInstaller --onefile --noconsole app.pyw
+
+キャッシュをクリアして作成
+python -m PyInstaller --clean --onefile --noconsole app.pyw
