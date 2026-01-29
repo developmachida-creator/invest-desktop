@@ -1,0 +1,39 @@
+# --- ビルド成果物 ---
+dist/
+build/
+out/
+bin/
+obj/
+*.spec
+
+# --- 依存ライブラリ (これらはコマンドで再インストールするため) ---
+node_modules/
+jspm_packages/
+package-lock.json (プロジェクトの方針によるが基本は含める)
+# Pythonの場合
+venv/
+.venv/
+__pycache__/
+
+# --- OS・エディタ関連 (個人の環境に依存するもの) ---
+.vscode/
+.idea/
+*.swp
+*.bak
+.DS_Store
+Thumbs.db
+
+# --- 機密情報 (絶対にコミットしてはいけない) ---
+.env
+.env.local
+.env.*.local
+*.pfx
+*.pem
+config/config.secret.json
+
+# --- ログ・キャッシュ ---
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.eslintcache
+.cache/
