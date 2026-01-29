@@ -2,6 +2,7 @@ import tkinter as tk
 import yfinance as yf
 import matplotlib.pyplot as plt
 import signal
+import sys
 from tkinter import messagebox
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from datetime import datetime
@@ -10,6 +11,7 @@ from datetime import datetime
 def fetch_stock_data(ticker):
     """短期(5), 中期(25), 長期(75)の移動平均と出来高データを取得"""
     try:
+        # 株価の取得。存在しないTickerが来た場合はNoneを返す。
         stock = yf.Ticker(ticker)
         df = stock.history(period="6mo") 
         if df.empty:
@@ -87,14 +89,31 @@ def on_click_display():
 
 # Ctrl + C を受け取った時の処理
 def handle_sigint(sig, frame):
-    print("\nCtrl+C を検知しました。終了します...")
-    root.quit()    # メインループを抜ける
-    root.destroy() # ウィンドウを破棄する
+    print("\n[Ctrl + C を検知] 終了します...")
+    safe_exit()
 
+def safe_exit():
+    # ウィンドウが存在するか確認してから処理
+    try:
+        if root.winfo_exists():
+            root.quit()     # mainloopを止める
+            root.destroy()  # ウィンドウを破棄
+    except tk.TclError:
+        pass # すでに破棄されている場合は無視
+    
+    # Pythonプロセス自体を終了させる（これで after の残骸も止まる）
+    sys.exit(0)
+
+# 「×」ボタンが押されたときに実行する関数
+def on_closing():
+    print("\n[×ボタンを検知] 終了します...")
+    safe_exit()
 
 # 一定時間（例: 500ミリ秒）ごとに、Python側に制御を戻して信号をチェックさせる
 def check_signal():
     root.after(500, check_signal)
+
+
 
 # --- 画面の構築 ---
 root = tk.Tk()
@@ -105,22 +124,29 @@ root.configure(bg="#f3f4f6")
 input_frame = tk.Frame(root, bg="#f3f4f6", pady=10)
 input_frame.pack()
 
-tk.Label(input_frame, text="Ticker Code:", bg="#f3f4f6").pack(side=tk.LEFT)
+tk.Label(input_frame, text="証券コード:", bg="#f3f4f6").pack(side=tk.LEFT)
 entry = tk.Entry(input_frame, font=("Consolas", 12))
 entry.insert(0, "7203.T")
 entry.pack(side=tk.LEFT, padx=10)
 
-btn = tk.Button(input_frame, text="更新する", command=on_click_display, 
-               bg="#3b82f6", fg="white", font=("Arial", 10, "bold"), padx=20)
+btn = tk.Button(input_frame, text="Enter", command=on_click_display,bg="#3b82f6", fg="white", font=("Arial", 10, "bold"), padx=20)
 btn.pack(side=tk.LEFT)
 
-status_label = tk.Label(root, text="Enter a ticker and press Analyze", 
-                        font=("Arial", 11), bg="#f3f4f6", pady=10)
+status_label = tk.Label(root, text="証券コード入れてEnterを押してください。",font=("Arial", 11), bg="#f3f4f6", pady=10)
 status_label.pack()
 
-# グラフ領域：2行1列で作成（高さの比率を 3:1 に設定）
-fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(7, 6), sharex=True, 
-                               gridspec_kw={'height_ratios': [3, 1]}, dpi=100)
+# グラフの土台（fig:外枠, ax1:上段の箱, ax2:下段の箱）を作成
+# 2行1列で並べ、高さの比を3:1にする。X軸（日付）は上下で共有する設定。
+# グラフの設計図を作成
+fig, (ax1, ax2) = plt.subplots(
+    2, 1,                 # 縦に2つ、横に1つのグラフを並べる
+    figsize=(7, 6),       # 全体のサイズ（幅7インチ、高さ6インチ）
+    sharex=True,          # 上下のグラフで横軸（日付）をピッタリ揃える
+    gridspec_kw={         # グラフ間の比率を設定
+        'height_ratios': [3, 1] # 上の箱を3、下の箱を1の高さにする
+    }, 
+    dpi=100               # 100dpiの解像度で作成
+)
 
 canvas = FigureCanvasTkAgg(fig, master=root)
 canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
@@ -128,5 +154,8 @@ canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
 # メインループの前にこれを設定
 signal.signal(signal.SIGINT, handle_sigint)
 root.after(500, check_signal)
+
+# ウィンドウが閉じられる時のプロトコルに、自作関数を紐付ける
+root.protocol("WM_DELETE_WINDOW", on_closing)
 
 root.mainloop()
