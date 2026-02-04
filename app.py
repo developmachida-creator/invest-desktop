@@ -17,7 +17,6 @@ def fetch_stock_data(ticker):
         if df.empty:
             return None, None
         
-        # 企業名の取得（日本株はshortName、外国株はlongNameが入りやすい）
         info = stock.info
         company_name = info.get('shortName') or info.get('longName') or ticker
         
@@ -28,18 +27,25 @@ def fetch_stock_data(ticker):
         df['5MA']  = df['Close'].rolling(window=5).mean()
         df['25MA'] = df['Close'].rolling(window=25).mean()
         df['75MA'] = df['Close'].rolling(window=75).mean()
+
+        # --- RSIの計算 (14日間) ---
+        diff = df['Close'].diff()
+        gain = diff.clip(lower=0)
+        loss = -diff.clip(upper=0)
+        avg_gain = gain.rolling(window=14).mean()
+        avg_loss = loss.rolling(window=14).mean()
+        rs = avg_gain / avg_loss
+        df['RSI'] = 100 - (100 / (1 + rs))
         
         return df, company_name
-    except Exception as e: # as e を追加してエラー内容を特定可能に
+    except Exception as e:
         print(f"Error fetching data: {e}")
         return None, None
 
 # --- 2. 描画の責務 ---
-def draw_chart(df, display_name, ax1, ax2):
-    """
-    display_name: グラフタイトルに表示する名前（企業名など）
-    """
+def draw_chart(df, display_name, ax1, ax_rsi, ax2):
     ax1.clear()
+    ax_rsi.clear()
     ax2.clear()
     
     plot_df = df.tail(60)
@@ -52,20 +58,26 @@ def draw_chart(df, display_name, ax1, ax2):
     
     # タイトルに企業名を表示
     ax1.set_title(f"{display_name} - Analysis", fontsize=12, fontweight='bold')
-    ax1.legend(fontsize=8, loc='upper left', frameon=True)
+    ax1.legend(fontsize=8, loc='upper left')
     ax1.grid(True, linestyle='--', alpha=0.3)
-    # 上段のX軸ラベルは非表示（下段と共有するため）
-    plt.setp(ax1.get_xticklabels(), visible=False)
+
+    # --- 中段: RSIチャート ---
+    ax_rsi.plot(plot_df.index, plot_df['RSI'], color='#8b5cf6', linewidth=1.5, label="RSI(14)")
+    # 70%(買われすぎ)と30%(売られすぎ)にラインを引く
+    ax_rsi.axhline(70, color='#ef4444', linestyle='--', linewidth=1, alpha=0.5)
+    ax_rsi.axhline(30, color='#3b82f6', linestyle='--', linewidth=1, alpha=0.5)
+    ax_rsi.set_ylim(0, 100)
+    ax_rsi.set_ylabel("RSI", fontsize=9)
+    ax_rsi.grid(True, linestyle='--', alpha=0.3)
+    ax_rsi.legend(fontsize=7, loc='upper left')
 
     # --- 下段: 出来高チャート ---
-    # 前日より高い日は緑、低い日は赤で色分けすると見やすい
     colors = ['#10b981' if row['Close'] >= row['Open'] else '#ef4444' for _, row in plot_df.iterrows()]
-    
     ax2.bar(plot_df.index, plot_df['Volume'], color=colors, alpha=0.7)
     ax2.set_ylabel("Volume", fontsize=9)
     ax2.grid(True, linestyle='--', alpha=0.3)
 
-    # X軸の調整（日付を斜めにする）
+    # X軸の調整
     ax2.tick_params(axis='x', rotation=30, labelsize=8)
     ax2.xaxis.set_major_locator(plt.MaxNLocator(10))
     
@@ -79,20 +91,18 @@ def on_click_display():
         messagebox.showwarning("入力エラー", "Enter ticker (e.g., 7203.T)")
         return
 
-    # 戻り値を2つ（データフレームと企業名）受け取る
     df, company_name = fetch_stock_data(ticker)
     
     if df is not None:
         latest_price = df['Close'].iloc[-1]
         time_str = datetime.now().strftime("%H:%M:%S")
         
-        # ステータスラベルを更新
         status_label.config(
             text=f"[{ticker}] {company_name} | 株価: {latest_price:.1f} JPY ({time_str})",
             fg="#1f2937"
         )
-        # 描画関数を呼ぶ（企業名を渡す）
-        draw_chart(df, company_name, ax1, ax2)
+        # 修正: ax_rsiを追加
+        draw_chart(df, company_name, ax1, ax_rsi, ax2)
     else:
         status_label.config(text="Fetch Failed", fg="#ef4444")
         messagebox.showerror("Error", "Ticker not found or connection issue.")
@@ -110,17 +120,13 @@ def safe_exit():
     except tk.TclError:
         pass
     sys.exit(0)
-
-def on_closing():
-    safe_exit()
-
-def check_signal():
-    root.after(500, check_signal)
+def on_closing(): safe_exit()
+def check_signal(): root.after(500, check_signal)
 
 # --- 画面の構築 ---
 root = tk.Tk()
-root.title("Stock Trend & Volume Analyzer")
-root.geometry("800x750")
+root.title("Stock Trend, RSI & Volume Analyzer")
+root.geometry("800x850") # 高さを少し広げる
 root.configure(bg="#f3f4f6")
 
 input_frame = tk.Frame(root, bg="#f3f4f6", pady=10)
@@ -137,17 +143,15 @@ btn.pack(side=tk.LEFT)
 status_label = tk.Label(root, text="証券コードを入れてEnterを押してください。", font=("Arial", 11), bg="#f3f4f6", pady=10)
 status_label.pack()
 
-# グラフの土台（fig:外枠, ax1:上段の箱, ax2:下段の箱）を作成
-# 2行1列で並べ、高さの比を3:1にする。X軸（日付）は上下で共有する設定。
-# グラフの設計図を作成
-fig, (ax1, ax2) = plt.subplots(
-    2, 1,                 # 縦に2つ、横に1つのグラフを並べる
-    figsize=(7, 6),       # 全体のサイズ（幅7インチ、高さ6インチ）
-    sharex=True,          # 上下のグラフで横軸（日付）をピッタリ揃える
-    gridspec_kw={         # グラフ間の比率を設定
-        'height_ratios': [3, 1] # 上の箱を3、下の箱を1の高さにする
+# グラフ設計図の修正 (3段構成)
+fig, (ax1, ax_rsi, ax2) = plt.subplots(
+    3, 1, 
+    figsize=(7, 7), 
+    sharex=True, 
+    gridspec_kw={
+        'height_ratios': [3, 1, 1] # RSIと出来高を同じ高さにする
     }, 
-    dpi=100               # 100dpiの解像度で作成
+    dpi=100
 )
 
 canvas = FigureCanvasTkAgg(fig, master=root)
