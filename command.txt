@@ -1,5 +1,6 @@
 実行コマンド
 python .\app.pyw
+python .\app.py
 
 ビルドコマンド
 python -m PyInstaller --onefile --noconsole app.pyw
