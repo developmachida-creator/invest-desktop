@@ -28,6 +28,11 @@ def fetch_stock_data(ticker):
         df['25MA'] = df['Close'].rolling(window=25).mean()
         df['75MA'] = df['Close'].rolling(window=75).mean()
 
+        # --- ボリンジャーバンドの計算 (25日基準) ---
+        std = df['Close'].rolling(window=25).std()
+        df['Upper'] = df['25MA'] + (std * 2)
+        df['Lower'] = df['25MA'] - (std * 2)
+
         # --- RSIの計算 (14日間) ---
         diff = df['Close'].diff()
         gain = diff.clip(lower=0)
@@ -51,6 +56,11 @@ def draw_chart(df, display_name, ax1, ax_rsi, ax2):
     plot_df = df.tail(60)
     
     # --- 上段: 価格チャート ---
+    # ボリンジャーバンドを先に描画（塗りつぶし）
+    ax1.fill_between(plot_df.index, plot_df['Lower'], plot_df['Upper'], color='#3b82f6', alpha=0.1, label="Bollinger(2σ)")
+    ax1.plot(plot_df.index, plot_df['Upper'], color='#3b82f6', linestyle=':', linewidth=0.8, alpha=0.4)
+    ax1.plot(plot_df.index, plot_df['Lower'], color='#3b82f6', linestyle=':', linewidth=0.8, alpha=0.4)
+    
     ax1.plot(plot_df.index, plot_df['Close'], label="Price", color='#1f2937', linewidth=2, alpha=0.8)
     ax1.plot(plot_df.index, plot_df['5MA'],  label="5MA", color='#3b82f6', linewidth=1.2)
     ax1.plot(plot_df.index, plot_df['25MA'], label="25MA", color='#ef4444', linewidth=1.5)
@@ -98,7 +108,7 @@ def on_click_display():
         time_str = datetime.now().strftime("%H:%M:%S")
         
         status_label.config(
-            text=f"[{ticker}] {company_name} | 株価: {latest_price:.1f} JPY ({time_str})",
+            text=f"[{ticker}] {company_name} | 株価: {latest_price:.1f} JPY ({time_str})| RSI: {df['RSI'].iloc[-1]:.1f}",
             fg="#1f2937"
         )
         # 修正: ax_rsiを追加
